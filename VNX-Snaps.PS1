@@ -13,6 +13,8 @@ Param(
 
 Start-Transcript $logFile
 
+Write-Host "Working with snapshot expiration time of $((Get-Date).AddDays(-$expireDays).addHours(-1))"
+
 Foreach ($connectionParams in $sanArray) {
     $Temp = Connect-EmcSystem -SystemType VNX-Block -CreationParameters $connectionParams
 }
@@ -35,7 +37,7 @@ $expiredSnaps = $targetEmcLuns |
     % {Get-EmcSnapshotLun -SourceLun $_} | 
     ? {$_.Name -match "^autoSnap-" } |
     ? {$_.CreationTime -lt (Get-Date).AddDays(-$expireDays).AddHours(-1) }
-Write-Host "Got $($expiredSnaps.Count) expired snapshots"
+Write-Host "Got $($expiredSnaps.Count) expired snapview snapshots"
 
 foreach ($expiredSnap in $expiredSnaps) {
     Write-Host "Remove expired snapshot $($expiredSnap.Name)"
@@ -43,10 +45,14 @@ foreach ($expiredSnap in $expiredSnaps) {
 }
 
 #Discover Advanced snapshots older than $expireDays and delete them
+# Has to use the name field since EMC PowerShell doesn't populate creation time
 $expiredAdvancedSnaps = $targetEmcLuns | 
     % { Get-EmcVnxAdvancedSnapshot -SourceLun $_ } | 
     ? {$_.Name -match "^autoSnap-" } |
-    ? {$_.CreationTime -lt (Get-Date).AddDays(-$expireDays).AddHours(-1) }
+    ? {[DateTime]($_.Name -split '-',3)[-1] -lt `
+        (Get-Date).AddDays(-$expireDays).AddHours(-1) }
+
+Write-Host "Got $($expiredAdvancedSnaps.Count) expired adavnced snapshots"
 
 foreach ($expiredAdvancedSnap in $expiredAdvancedSnaps) {
     Write-Host "Remove expired snapshot $($expiredAdvancedSnap.Name)"
